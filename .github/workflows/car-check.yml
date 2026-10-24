@@ -1,0 +1,46 @@
+name: car-check
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Send one test push with the current status"
+        type: boolean
+        default: false
+
+concurrency: car-check
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      # state (problem seen last time, already alerted) carries over between runs
+      - uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: state-${{ github.run_id }}
+          restore-keys: state-
+      - run: python check.py ${{ inputs.test && '--test' || '' }}
+        env:
+          BYD_USERNAME: ${{ secrets.BYD_USERNAME }}
+          BYD_PASSWORD: ${{ secrets.BYD_PASSWORD }}
+          BYD_BASE_URL: ${{ secrets.BYD_BASE_URL }}
+          BYD_COUNTRY_CODE: ${{ secrets.BYD_COUNTRY_CODE }}
+          BYD_LANGUAGE: ${{ secrets.BYD_LANGUAGE }}
+          BYD_TIME_ZONE: ${{ secrets.BYD_TIME_ZONE }}
+          BYD_IDENTIFIER_TYPE: ${{ secrets.BYD_IDENTIFIER_TYPE }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: state
+          key: state-${{ github.run_id }}
